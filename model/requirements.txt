@@ -1,0 +1,13 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+torch==2.1.0
+torchvision==0.16.0
+Pillow==10.1.0
+numpy==1.24.3
+timm==0.9.10
+scikit-learn==1.3.2
+matplotlib==3.7.2
+opencv-python==4.8.1.78
+grad-cam==1.5.5
+captum==0.8.0
