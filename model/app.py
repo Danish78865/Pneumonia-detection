@@ -1,41 +1,55 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import torch
 import torch.nn.functional as F
 from PIL import Image
 import io
 import torchvision.transforms as transforms
-import numpy as np
 import time
 import os
 
-# Import your model classes
-import sys
-sys.path.append('..')
 from pneumonia_detection_using_vit_and_cnn import HybridViTCNN
 
 app = FastAPI(title="PneuAI API", description="Pneumonia Detection API")
 
-# Enable CORS
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://pneumonia-detection-ai-inky.vercel.app")
+ALLOWED_ORIGINS = [
+    FRONTEND_URL,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global variables for model
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
+
 model = None
 transform = None
+
+MODEL_PATHS = [
+    os.getenv("MODEL_PATH"),
+    "models/pneumonia_model.pth",
+    "models/best_model.pth",
+    "../models/pneumonia_model.pth",
+    "pneumonia_model.pth",
+    "best_model.pth",
+]
 
 def load_model():
     """Load the trained model"""
     global model, transform
     
-    # Initialize model
     model = HybridViTCNN(
         img_size=224,
         patch_size=16,
@@ -50,10 +64,11 @@ def load_model():
         attn_drop_rate=0.0
     )
     
-    # Load trained weights (you'll need to save your model first)
-    model_path = '../models/pneumonia_model.pth'  # Update this path
-    if os.path.exists(model_path):
-        model.load_state_dict(torch.load(model_path, map_location=device))
+    model_path = next((p for p in MODEL_PATHS if p and os.path.exists(p)), None)
+    if model_path:
+        checkpoint = torch.load(model_path, map_location=device)
+        state_dict = checkpoint.get("model_state_dict", checkpoint)
+        model.load_state_dict(state_dict)
         print(f"Model loaded from {model_path}")
     else:
         print("No trained model found, using random weights for demo")

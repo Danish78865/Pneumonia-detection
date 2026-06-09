@@ -5,7 +5,7 @@ class ModelService {
   constructor() {
     // For development, we'll use simulation
     // In production, this would point to your actual API endpoint
-    this.apiEndpoint = process.env.REACT_APP_API_ENDPOINT || 'http://localhost:8000';
+    this.apiEndpoint = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:8000';
   }
 
   // Simulate model prediction (for development)
@@ -62,7 +62,9 @@ class ModelService {
       return result;
     } catch (error) {
       console.error('Error calling prediction API:', error);
-      // Fallback to simulation if API fails
+      if (import.meta.env.VITE_API_ENDPOINT) {
+        throw error;
+      }
       return this.simulatePrediction(imageFile);
     }
   }

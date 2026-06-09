@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: pneuai-api
+    runtime: python
+    rootDir: model
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: FRONTEND_URL
+        value: https://pneumonia-detection-ai-inky.vercel.app
+      - key: PYTHON_VERSION
+        value: "3.11.9"

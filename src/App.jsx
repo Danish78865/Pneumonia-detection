@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import * as THREE from "three";
+import modelService from "./modelService";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN DIRECTION: Medical-Grade Clinical Precision
@@ -347,6 +348,7 @@ export default function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [step, setStep] = useState(-1);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
   const [view, setView] = useState("original"); // original | attention
   const [drag, setDrag] = useState(false);
   const fileRef = useRef(null);
@@ -356,7 +358,7 @@ export default function App() {
 
   const load = useCallback(f => {
     if (!f?.type.startsWith("image/")) return;
-    setFile(f); setResult(null); setStep(-1); setView("original");
+    setFile(f); setResult(null); setError(null); setStep(-1); setView("original");
     const r = new FileReader();
     r.onload = e => setImage(e.target.result);
     r.readAsDataURL(f);
@@ -364,27 +366,45 @@ export default function App() {
 
   const analyze = async () => {
     if (!file) return;
-    setAnalyzing(true); setResult(null);
-    for (let i = 0; i < PIPELINE.length; i++) {
-      setStep(i);
-      await new Promise(r => setTimeout(r, 280 + Math.random() * 220));
+    setAnalyzing(true);
+    setResult(null);
+    setError(null);
+
+    const pipelinePromise = (async () => {
+      for (let i = 0; i < PIPELINE.length; i++) {
+        setStep(i);
+        await new Promise(r => setTimeout(r, 280 + Math.random() * 220));
+      }
+    })();
+
+    try {
+      const apiResult = await modelService.predictImage(file);
+      await pipelinePromise;
+
+      const isPneu = apiResult.prediction === "PNEUMONIA";
+      const conf = apiResult.confidence;
+      const normalPct = apiResult.details?.class_probabilities?.NORMAL ?? (isPneu ? 100 - conf : conf);
+      const pneuPct = apiResult.details?.class_probabilities?.PNEUMONIA ?? (isPneu ? conf : 100 - conf);
+
+      setResult({
+        isPneu,
+        conf,
+        normalPct,
+        pneuPct,
+        severity: isPneu ? (conf > 90 ? "Severe" : conf > 80 ? "Moderate" : "Mild") : "—",
+        time: String(apiResult.processing_time ?? "1.00"),
+        entropy: (Math.random() * 0.09 + 0.01).toFixed(4),
+        pid: `PX-${Math.floor(Math.random() * 90000 + 10000)}`,
+        uid: `SC-${Date.now().toString(36).toUpperCase()}`,
+      });
+    } catch (err) {
+      setError(err.message || "Analysis failed. Please try again.");
+    } finally {
+      setAnalyzing(false);
     }
-    const isPneu = Math.random() > 0.42;
-    const conf = isPneu ? 75 + Math.random() * 22 : 82 + Math.random() * 15;
-    setResult({
-      isPneu, conf,
-      normalPct: isPneu ? 100 - conf : conf,
-      pneuPct: isPneu ? conf : 100 - conf,
-      severity: isPneu ? (conf > 90 ? "Severe" : conf > 80 ? "Moderate" : "Mild") : "—",
-      time: (0.97 + Math.random() * 0.15).toFixed(2),
-      entropy: (Math.random() * 0.09 + 0.01).toFixed(4),
-      pid: `PX-${Math.floor(Math.random()*90000+10000)}`,
-      uid: `SC-${Date.now().toString(36).toUpperCase()}`,
-    });
-    setAnalyzing(false);
   };
 
-  const reset = () => { setImage(null); setFile(null); setResult(null); setStep(-1); setAnalyzing(false); if(fileRef.current) fileRef.current.value=""; };
+  const reset = () => { setImage(null); setFile(null); setResult(null); setError(null); setStep(-1); setAnalyzing(false); if(fileRef.current) fileRef.current.value=""; };
 
   return (
     <div style={{ fontFamily:"'IBM Plex Sans','Helvetica Neue',sans-serif", background: C.white, color: C.text, minHeight:"100vh" }}>
@@ -697,6 +717,16 @@ export default function App() {
                     </>
                   ) : "▶  BEGIN NEURAL ANALYSIS"}
                 </motion.button>
+              )}
+
+              {error && (
+                <div className="mono" style={{
+                  marginTop:12, padding:"12px 14px", borderRadius:6,
+                  background:C.alertL, border:`1px solid ${C.alert}40`,
+                  color:C.alert, fontSize:11, lineHeight:1.5,
+                }}>
+                  {error}
+                </div>
               )}
             </div>
 
